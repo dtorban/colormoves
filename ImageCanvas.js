@@ -237,6 +237,16 @@ var fb = gl.createFramebuffer();
 			requestAnimFrame(render);
 		}
 
+		function animationLoop(){
+		  // feedback loop requests new frame
+		  requestAnimFrame( animationLoop );
+		  // render function is defined below
+		  //console.log("rendering");
+		  render(); 
+		}
+
+		requestAnimFrame(animationLoop);
+
 		this.render = function(renderingToFile)
 		{
 			if(currentImage == null)
@@ -617,6 +627,16 @@ setColorMap(gl, sdr, sections, function(section) {return section.colorMap.texI;}
 		
 		this.loadImage = function(name, tex, width, height, isLayer, isFloatImage)
 		{
+
+			// The way to use the shared texture:
+			// 1. Bind to the texture that has been created and initialized somehow
+			gl.bindTexture(gl.TEXTURE_2D, tex);
+			// 2. Register the shared texture using this hack for the level=13.  This means use the first shared texture (level-13 = 0).
+			//    Using shared texture index 1 is 14 (level-13 = 14-13 = 1)
+			gl.texImage2D(gl.TEXTURE_2D, 13, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([0, 0, 255, 255]));
+			// 3. Rebind to the texture and it will use the shared texture instead every time you bind.
+			gl.bindTexture(gl.TEXTURE_2D, tex);
+
 			console.log(guessImageLayout(tex, width, height));
 			var newLayer = {
 				tex: tex,

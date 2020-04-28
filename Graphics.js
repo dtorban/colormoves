@@ -427,6 +427,7 @@ function CreateGridMesh(gl)
 	return new Mesh(gl, positions, null, null, null, null, null, gl.LINES);
 }
 
+
 function webGLStart(canvas)
 {
 	var gl = WebGLUtils.setupWebGL(canvas);
