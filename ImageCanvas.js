@@ -168,6 +168,9 @@ var fb = gl.createFramebuffer();
 		var currentImage = null;
 		var transform = mat4.create();
 
+		var outputFramebuffer = null;
+		var outputTexture = null;
+
 		var closeButton = null;
 		
 		this.init = function()
@@ -237,20 +240,11 @@ var fb = gl.createFramebuffer();
 			requestAnimFrame(render);
 		}
 
-		function animationLoop(){
-		  // feedback loop requests new frame
-		  requestAnimFrame( animationLoop );
-		  // render function is defined below
-		  //console.log("rendering");
-		  render(); 
-		}
-
-		requestAnimFrame(animationLoop);
-
 		this.render = function(renderingToFile)
 		{
 			if(currentImage == null)
 				return;
+
 			var sdr = null;
 			
 			currentImage.layers.forEach(function(layer) {
@@ -278,6 +272,8 @@ setColorMap(gl, sdr, sections, function(section) {return section.colorMap.texI;}
 				meshquad.draw();
 			}, this);
 		}
+
+
 
 		this.zoomReset = function()
 		{
@@ -633,7 +629,7 @@ setColorMap(gl, sdr, sections, function(section) {return section.colorMap.texI;}
 			gl.bindTexture(gl.TEXTURE_2D, tex);
 			// 2. Register the shared texture using this hack for the level=13.  This means use the first shared texture (level-13 = 0).
 			//    Using shared texture index 1 is 14 (level-13 = 14-13 = 1)
-			gl.texImage2D(gl.TEXTURE_2D, 13, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([0, 0, 255, 255]));
+			gl.texImage2D(gl.TEXTURE_2D, 8, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([0, 0, 255, 255]));
 			// 3. Rebind to the texture and it will use the shared texture instead every time you bind.
 			gl.bindTexture(gl.TEXTURE_2D, tex);
 
@@ -683,6 +679,8 @@ setColorMap(gl, sdr, sections, function(section) {return section.colorMap.texI;}
 				requestAnimFrame(render);
 			}
 		}
+
+
 		
 		this.save = function()
 		{
@@ -756,7 +754,86 @@ setColorMap(gl, sdr, sections, function(section) {return section.colorMap.texI;}
 			
 			return {name: currentImage.name.substr(0, currentImage.name.lastIndexOf('.')) + ".png", dataURL: tempCanvas.toDataURL()};
 		}
+
+		this.renderToTexture = function() {
+			if(currentImage == null)
+				return null;
+			
+
+			if (!outputFramebuffer) {
+				outputFramebuffer =  gl.createFramebuffer();
+				gl.bindFramebuffer(gl.FRAMEBUFFER, outputFramebuffer);
+				outputFramebuffer.width = 1024;
+				outputFramebuffer.height = 1024;
+
+				var renderbuffer = gl.createRenderbuffer();
+				gl.bindRenderbuffer(gl.RENDERBUFFER, renderbuffer);
+				gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT16, outputFramebuffer.width, outputFramebuffer.height);
+
+
+				/*
+				var rttTexture = gl.createTexture();
+				gl.bindTexture(gl.TEXTURE_2D, rttTexture);
+				gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+				gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+
+				gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, rttFramebuffer.width, rttFramebuffer.height, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+				*/
+
+				//outputTexture = loadTexture(gl);
+			  	/*gl.bindTexture(gl.TEXTURE_2D, outputTexture);
+			  	gl.texImage2D(gl.TEXTURE_2D, 9, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([0, 0, 255, 255]));
+			  	gl.bindTexture(gl.TEXTURE_2D, outputTexture);*/
+
+			  	outputTexture = gl.createTexture();
+				gl.bindTexture(gl.TEXTURE_2D, outputTexture);
+				gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+				gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+
+				gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, outputFramebuffer.width, outputFramebuffer.height, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+
+				gl.bindTexture(gl.TEXTURE_2D, outputTexture);
+			  	gl.texImage2D(gl.TEXTURE_2D, 9, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([0, 0, 255, 255]));
+			  	gl.bindTexture(gl.TEXTURE_2D, outputTexture);
+
+
+				gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, outputTexture, 0);
+				gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, renderbuffer);
+
+				gl.bindTexture(gl.TEXTURE_2D, null);
+				gl.bindRenderbuffer(gl.RENDERBUFFER, null);
+				gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+			}
+			var width = currentImage.width, height = currentImage.height;
+
+			gl.bindFramebuffer(gl.FRAMEBUFFER, outputFramebuffer);
+			gl.viewportWidth = width;
+			gl.viewportHeight = height;
+			gl.viewport(0, 0, gl.viewportWidth, gl.viewportHeight);
+
+			// Hide highlighted areas
+			gl.useProgram(sdrFloat);
+			gl.uniform1f(gl.getUniformLocation(sdrFloat, "highlightValue"), -1e20);
+			
+			this.render(true);
+			
+			// Restore highlighted areas
+			if (highlightedValue !== -1e20)
+			{
+				gl.useProgram(sdrFloat);
+				gl.uniform1f(gl.getUniformLocation(sdrFloat, "highlightValue"), highlightedValue);
+			}
+			
+			gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+
+			gl.viewportWidth = canvas.width = div.offsetWidth;
+			gl.viewportHeight = canvas.height = div.offsetHeight;
+			gl.viewport(0, 0, gl.viewportWidth, gl.viewportHeight);
+		}
 	}
+
+
+
 	
 	function render()
 	{
@@ -764,6 +841,7 @@ setColorMap(gl, sdr, sections, function(section) {return section.colorMap.texI;}
 		
 		// Draw views
 		views.forEach(function(view) {
+			view.renderToTexture();
 			gl.viewport(gl.viewportWidth * view.x, gl.viewportHeight * (1.0 - view.y - view.height), gl.viewportWidth * view.width, gl.viewportHeight * view.height);
 			view.render();
 		});
@@ -808,6 +886,16 @@ setColorMap(gl, sdr, sections, function(section) {return section.colorMap.texI;}
 				}
 		}
 	}
+
+	function animationLoop(){
+		  // feedback loop requests new frame
+		  requestAnimFrame( animationLoop );
+		  // render function is defined below
+		  //console.log("rendering");
+		  render(); 
+	}
+
+	requestAnimFrame(animationLoop);
 
 	this.zoomReset = function()
 	{
